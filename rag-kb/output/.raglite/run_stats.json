@@ -1,0 +1,15 @@
+{
+  "engine": "openclaw",
+  "ollama_model": "llama3.2:3b",
+  "outline": false,
+  "nodes": true,
+  "input": "/root/.openclaw/workspace-HR-Agent/rag-kb/docs",
+  "out": "/root/.openclaw/workspace-HR-Agent/rag-kb/output",
+  "total_candidates": 1,
+  "processed": 1,
+  "ok": 0,
+  "skipped": 0,
+  "errors": 1,
+  "startedAt": "2026-05-01T13:46:57Z",
+  "durationSeconds": 4.65
+}

@@ -1,0 +1,54 @@
+{
+  "keywords": "java开发工程师",
+  "location": "河南-周口",
+  "education": "本科及以上",
+  "experience": "不限",
+  "candidates": [
+    {
+      "name": "曹先生",
+      "gender": "男",
+      "age": "27岁",
+      "work_years": "6年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1rXmsSc5aSO3x"
+    },
+    {
+      "name": "刘先生",
+      "gender": "男",
+      "age": "22岁",
+      "work_years": "26年应届生",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1p1am52siPEr4"
+    },
+    {
+      "name": "李先生",
+      "gender": "男",
+      "age": "24岁",
+      "work_years": "2年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1p29ZpW0iPEr4"
+    },
+    {
+      "name": "李先生",
+      "gender": "男",
+      "age": "24岁",
+      "work_years": "3年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1p33M5ZsiPEr4"
+    },
+    {
+      "name": "杨先生",
+      "gender": "男",
+      "age": "27岁",
+      "work_years": "5年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1qL8iF(Hgdw7w"
+    }
+  ],
+  "saved_at": "2026-05-25 10:32:35"
+}

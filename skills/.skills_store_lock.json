@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "skills": {
+    "xiaoding-skill-vetter": {
+      "name": "Skill Vetter",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=xiaoding-skill-vetter",
+      "source": "skillhub",
+      "version": "1.0.3"
+    },
+    "summarize": {
+      "name": "Summarize",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=summarize",
+      "source": "skillhub",
+      "version": "1.0.0"
+    },
+    "humanizer": {
+      "name": "Humanizer",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=humanizer",
+      "source": "skillhub",
+      "version": "1.0.0"
+    },
+    "agent-browser": {
+      "name": "Agent Browser",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=agent-browser",
+      "source": "skillhub",
+      "version": "0.2.0"
+    },
+    "skill-creator": {
+      "name": "Skill Creator",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=skill-creator",
+      "source": "skillhub",
+      "version": "0.1.0"
+    },
+    "self-improving-agent": {
+      "name": "self-improving-agent",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=self-improving-agent",
+      "source": "skillhub",
+      "version": "1.0.11"
+    },
+    "tavily": {
+      "name": "Tavily AI Search",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=tavily",
+      "source": "skillhub",
+      "version": "1.0.0"
+    },
+    "web-content-fetcher": {
+      "name": "Web Content Fetcher",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=web-content-fetcher",
+      "source": "skillhub",
+      "version": "1.0.1"
+    },
+    "memory-setup-openclaw": {
+      "name": "Memory Setup (OpenClaw)",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=memory-setup-openclaw",
+      "source": "skillhub",
+      "version": "1.0.0"
+    },
+    "raglite": {
+      "name": "RAGLite",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=raglite",
+      "source": "skillhub",
+      "version": "1.0.8"
+    },
+    "find-skill": {
+      "name": "Find Skill",
+      "zip_url": "https://lightmake.site/api/v1/download?slug=find-skill",
+      "source": "skillhub",
+      "version": "1.0.0"
+    }
+  }
+}

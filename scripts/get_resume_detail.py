@@ -1,0 +1,1 @@
+../skills/zhaopin-skill/scripts/get_resume_detail.py

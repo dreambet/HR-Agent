@@ -1,0 +1,1 @@
+../skills/zhaopin-skill/scripts/greet_candidate.py

@@ -1,0 +1,54 @@
+{
+  "keywords": "人力培训主管",
+  "location": "深圳-宝安",
+  "education": "本科及以上",
+  "experience": "不限",
+  "candidates": [
+    {
+      "name": "强先生",
+      "gender": "男",
+      "age": "34岁",
+      "work_years": "14年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149Xx8EVrRPPJDS2hH44"
+    },
+    {
+      "name": "白女士",
+      "gender": "女",
+      "age": "37岁",
+      "work_years": "16年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1qWa9qcQz2wWd"
+    },
+    {
+      "name": "苏先生",
+      "gender": "男",
+      "age": "45岁",
+      "work_years": "21年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149Xx8EVskT0Cg9ZNjDP"
+    },
+    {
+      "name": "陈先生",
+      "gender": "男",
+      "age": "33岁",
+      "work_years": "12年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149Xx8EVrRsTiNy2hH44"
+    },
+    {
+      "name": "王先生",
+      "gender": "男",
+      "age": "27岁",
+      "work_years": "9年",
+      "education": "本科",
+      "match_score": "",
+      "resume_number": "ZtSVePjMyOda149X)fv1p2h)BeEiPEr4"
+    }
+  ],
+  "saved_at": "2026-05-25 14:17:06"
+}

@@ -1,0 +1,22 @@
+# 敏感文件
+config/zhaopin_cookies.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 系统
+.openclaw/
+.learnings/
+
+# 本地记忆
+memory/
+MEMORY.md
+
+# 临时文件
+/tmp/
+*.log
+
+# 报告文件
+reports/

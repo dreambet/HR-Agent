@@ -1,0 +1,17 @@
+{
+  "last_check": "2026-05-25 00:04:55",
+  "last_count": 1000,
+  "api_status": "normal",
+  "cookie_valid": true,
+  "http_status": 200,
+  "returned_sample_size": 5,
+  "monitor_keyword": "测试",
+  "note": "智联搜索接口正常；total 为接口返回总量/上限值，用于可用性监控。",
+  "latest_resume_fingerprints": [
+    "ZtSVePjMyOda149X)fv1qIrc9A)gdw7w",
+    "ZtSVePjMyOda149X)fv1qXxX8Rkz2wWd",
+    "ZtSVePjMyOda149X)fv1p3n4U2MiPEr4",
+    "ZtSVePjMyOda149X)fv1qIjIvm)gdw7w",
+    "ZtSVePjMyOda149X)fv1qIVwDjvgdw7w"
+  ]
+}
