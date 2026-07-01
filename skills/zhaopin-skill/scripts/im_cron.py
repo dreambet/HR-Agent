@@ -45,9 +45,9 @@ def get_unread_user_messages():
         known_time = known.get('lastMsgTime', 0)
         is_new = send_time > known_time
         
-        # 检测是否有附件简历
+        # 检测是否有附件简历（仅对新消息检测，避免重复下载）
         attach_info = None
-        if '简历' in text or '附件' in text:
+        if is_new and ('简历' in text or '附件' in text):
             attach_info = check_and_download_attach(session)
         
         msg_info = {
