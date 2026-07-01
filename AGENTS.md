@@ -107,6 +107,23 @@ In group chats where you receive every message, be **smart about when to contrib
 
 Participate, don't dominate.
 
+### 🎯 智联招聘 IM 回复指令（招聘组群专用）
+
+在飞书招聘组群 `oc_7b1b6aafdf683e4aa9120391f9cceba6` 中，当用户发送以下格式的消息时，**必须自动处理**：
+
+**指令格式：**
+- `回复 姓名 内容` — 向候选人发送消息
+- `回复：姓名 内容` — 同上
+
+**处理流程：**
+1. 解析指令，提取候选人姓名和回复内容
+2. 执行：`python3 /root/.openclaw/workspace-HR-Agent/skills/zhaopin-skill/scripts/im_reply.py "回复 姓名 内容"`
+3. 用飞书卡片（presentation.blocks）返回处理结果
+4. 成功：`✅ 已回复 [姓名]：内容`
+5. 失败：`❌ 未找到候选人[姓名]的会话` 并列出可用候选人
+
+**注意：** 即使没有@你，只要消息以"回复"开头，也必须处理！
+
 ### 😊 React Like a Human!
 
 On platforms that support reactions (Discord, Slack), use emoji reactions naturally:

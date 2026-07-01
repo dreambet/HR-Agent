@@ -821,6 +821,7 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=True,
+                executable_path='/snap/chromium/current/usr/lib/chromium-browser/chrome',
                 args=['--no-sandbox', '--disable-dev-shm-usage']
             )
             context = browser.new_context()
@@ -1724,6 +1725,8 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
             
             if target_found and greet_button_clicked:
                 print(f"\n✅ 成功向 {candidate_name} 发送打招呼消息!")
+                # 记录打招呼信息到 IM 状态文件，便于后续消息监控
+                _save_greeting_record(candidate_name, candidate_info)
                 return True
             else:
                 print(f"\n❌ 打招呼失败")
@@ -1734,6 +1737,35 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
         import traceback
         traceback.print_exc()
         return None
+
+
+def _save_greeting_record(candidate_name, candidate_info=None):
+    """保存打招呼记录到 IM 状态文件，便于后续消息监控"""
+    import json
+    state_file = '/root/.openclaw/workspace-HR-Agent/config/im_state.json'
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
+    
+    state = {}
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+        except:
+            pass
+    
+    if 'greeted_candidates' not in state:
+        state['greeted_candidates'] = {}
+    
+    state['greeted_candidates'][candidate_name] = {
+        'name': candidate_name,
+        'greet_time': int(time.time() * 1000),
+        'greet_time_str': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'candidate_info': candidate_info or {}
+    }
+    
+    with open(state_file, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    print(f"   ✅ 已记录打招呼信息: {candidate_name}")
 
 
 def main():

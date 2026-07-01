@@ -119,6 +119,7 @@ def take_search_screenshot(keywords, location=None, education=None, experience=N
         with playwright() as p:
             browser_obj = p.chromium.launch(
                 headless=True,
+                executable_path='/snap/chromium/current/usr/lib/chromium-browser/chrome',
                 args=['--no-sandbox', '--disable-dev-shm-usage']
             )
             context = browser_obj.new_context()

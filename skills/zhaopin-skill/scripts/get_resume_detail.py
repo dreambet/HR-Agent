@@ -490,7 +490,7 @@ def get_resume_detail_by_name(candidate_name, job_keyword, cookies=None, locatio
     
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+            browser = p.chromium.launch(headless=True, executable_path='/snap/chromium/current/usr/lib/chromium-browser/chrome', args=['--no-sandbox'])
             context = browser.new_context(
                 viewport={'width': 1920, 'height': 1080}
             )
