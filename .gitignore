@@ -1,5 +1,11 @@
 # 敏感文件
 config/zhaopin_cookies.txt
+**/zhaopin_cookies.txt
+**/zhaopin_cookies.txt.bak*
+config/im_state.json
+**/im_state.json
+config/im_login_alert.json
+config/im_session_alert.json
 
 # Python
 __pycache__/
