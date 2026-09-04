@@ -53,8 +53,35 @@ def get_city_id(city_name):
     return city_map.get(city_name, 734)
 
 
+def get_city_ids(city_name):
+    """城市名转ID列表，支持多城市复合地点（如 周口-深圳-东莞）。
+    全部城市都无法识别时回退到默认 734（周口），与 get_city_id 行为一致，避免空列表。"""
+    if not city_name:
+        return []
+    city_map = {
+        "周口": 734, "郑州": 701, "北京": 530, "上海": 538,
+        "深圳": 765, "广州": 763, "杭州": 653, "南京": 635,
+        "东莞": 779, "中山": 780, "成都": 801, "武汉": 736,
+        "西安": 854, "长沙": 749, "重庆": 551, "苏州": 639,
+        "宝安": 765, "惠州": 773, "清溪": 779,
+    }
+    ids = []
+    for part in city_name.replace(' ', '-').split('-'):
+        part = part.strip()
+        if not part:
+            continue
+        # 处理 "河南-周口" 格式，取最后一段
+        pid = city_map.get(part)
+        if pid is not None and pid not in ids:
+            ids.append(pid)
+    # 兜底：全部无法识别时回退默认周口，避免空数组导致API异常
+    if not ids:
+        ids = [734]
+    return ids
+
+
 def build_filter_params(location=None, education=None, experience=None):
-    """构建过滤参数（尽量与search_resumes.py一致）"""
+    """构建过滤参数（尽量与search_resumes.py一致，支持多城市）"""
     params = {
         'filteringChatted': False,
         'filteringRead': False,
@@ -71,9 +98,9 @@ def build_filter_params(location=None, education=None, experience=None):
     }
     
     if location:
-        city_id = get_city_id(location)
-        if city_id:
-            params['expectedCityIds'] = [city_id]
+        city_ids = get_city_ids(location)
+        if city_ids:
+            params['expectedCityIds'] = city_ids
     
     if education and '不限' not in education:
         edu_map = {"初中": "9", "初中及以下": "9", "高中": "7", "中专": "12", "中专/中技": "12", "中技": "12", "大专": "5", "本科": "4", "硕士": "3", "博士": "1"}
@@ -694,6 +721,53 @@ def find_candidate_on_page(page, candidate_name, candidate_info=None):
     return result
 
 
+def _find_modal_for_candidate(page, candidate_name):
+    """返回包含候选人姓名的‘选择沟通职位’弹窗（Playwright Locator），找不到返回 None
+    支持多个弹窗叠加时按姓名精确锁定。"""
+    # 优先：可见的 .km-modal__wrapper
+    for sel in ['.km-modal__wrapper:visible', '.resume-buttons-chat', '.km-modal__wrapper']:
+        modals = page.locator(sel)
+        for i in range(modals.count()):
+            m = modals.nth(i)
+            try:
+                txt = m.inner_text() or ''
+            except Exception:
+                continue
+            if '选择沟通职位' in txt and candidate_name in txt:
+                return m
+    # 兜底：任意 dialog/modal 含候选人名
+    try:
+        modals = page.locator('[role="dialog"], .km-modal, .s-dialog')
+        for i in range(modals.count()):
+            m = modals.nth(i)
+            try:
+                txt = m.inner_text() or ''
+            except Exception:
+                continue
+            if '选择沟通职位' in txt and candidate_name in txt:
+                return m
+    except Exception:
+        pass
+    return None
+
+
+def _click_in_modal(page, modal, texts):
+    """在指定 modal 内点击文本匹配的按钮；返回 (是否成功, 按钮文本)"""
+    try:
+        btns = modal.locator('button:visible')
+        for i in range(btns.count()):
+            try:
+                t = (btns.nth(i).text_content() or '').strip()
+            except Exception:
+                continue
+            if t in texts or any(x in t for x in texts):
+                btns.nth(i).click(force=True)
+                return True, t
+    except Exception:
+        pass
+    return False, None
+
+
 def has_next_page(page):
     """检查是否有下一页（修复：使用query_selector直接查DOM）"""
     try:
@@ -732,6 +806,314 @@ def click_next_page(page):
         return False
     except:
         return False
+
+
+def send_greeting_robust(page, candidate_name, job_title, job_number, screenshot=False, debug_dir=''):
+    """
+    健壮版打招呼发送：按候选人姓名精确锁定弹窗，逐步处理关键词框→选职位→确定→使用并发送→验证。
+    返回：True=确认成功, False=确认失败, None=无法确定(需人工复核)
+    """
+    import json as _json
+    page.wait_for_timeout(1500)
+
+    # ---- 强制关闭“请选择关键词”对话框（若存在）：直接点它自己的“确定”----
+    for _attempt in range(3):
+        kw_dialog = page.evaluate('''() => {
+            const ds = document.querySelectorAll('.s-dialog');
+            for (const d of ds) {
+                const t = (d.innerText || '');
+                const st = window.getComputedStyle(d);
+                const r = d.getBoundingClientRect();
+                if (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0)) continue;
+                if (t.includes('请选择关键词')) return { found: true };
+            }
+            return { found: false };
+        }''')
+        if not kw_dialog.get('found'):
+            break
+        print(f"   [健壮] 发现残留关键词选择框，直接点确定关闭...")
+        closed = page.evaluate('''() => {
+            const ds = document.querySelectorAll('.s-dialog');
+            for (const d of ds) {
+                const t = (d.innerText || '');
+                const st = window.getComputedStyle(d);
+                const r = d.getBoundingClientRect();
+                if (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0)) continue;
+                if (!t.includes('请选择关键词')) continue;
+                const btns = d.querySelectorAll('button');
+                for (const b of btns) {
+                    const bt = (b.textContent || '').trim();
+                    if (bt === '确定' || bt === '确 定') { b.click(); return true; }
+                }
+                // 若无确定按钮，点关闭图标
+                const close = d.querySelector('[class*="close"]');
+                if (close) { close.click(); return true; }
+            }
+            return false;
+        }''')
+        print(f"   [健壮] 关键词框关闭操作: {closed}")
+        page.wait_for_timeout(1500)
+
+    # ---- 定位包含候选人姓名的“选择沟通职位”弹窗 ----
+    modal = _find_modal_for_candidate(page, candidate_name)
+    if modal is None:
+        print(f"   [健壮] ❌ 未找到 {candidate_name} 的沟通职位弹窗")
+        return False
+    print(f"   [健壮] ✅ 已定位 {candidate_name} 的沟通职位弹窗")
+    if screenshot:
+        page.screenshot(path=f"{debug_dir}/r1_modal_found.png")
+
+    # ---- 选择沟通职位 ----
+    # 先看职位是否已选
+    pos_state = page.evaluate('''() => {
+        const modals = [...document.querySelectorAll('.km-modal__wrapper')].filter(m => {
+            const st = window.getComputedStyle(m); const r = m.getBoundingClientRect();
+            return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+        });
+        const target = [...modals].find(m => (m.innerText||'').includes('选择沟通职位') && (m.innerText||'').includes('候选人'));
+        if (!target) return { hasModal: false };
+        const inputs = target.querySelectorAll('input');
+        for (const inp of inputs) {
+            if ((inp.placeholder||'').includes('沟通职位')) {
+                return { hasModal: true, value: (inp.value||'').trim() };
+            }
+        }
+        return { hasModal: true, value: '' };
+    }''')
+    print(f"   [健壮] 职位当前值: {pos_state.get('value') or '(空)'}")
+
+    if not pos_state.get('value'):
+        # 打开下拉
+        page.evaluate('''() => {
+            const modals = [...document.querySelectorAll('.km-modal__wrapper')].filter(m => {
+                const st = window.getComputedStyle(m); const r = m.getBoundingClientRect();
+                return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+            });
+            const target = [...modals].find(m => (m.innerText||'').includes('选择沟通职位') && (m.innerText||'').includes('候选人'));
+            if (!target) return;
+            const inputs = target.querySelectorAll('input');
+            for (const inp of inputs) {
+                if ((inp.placeholder||'').includes('沟通职位')) { inp.click(); break; }
+            }
+        }''')
+        page.wait_for_timeout(1200)
+        try:
+            page.wait_for_selector('.km-select__dropdown', timeout=4000)
+            print(f"   [健壮] 下拉已打开")
+        except Exception:
+            print(f"   [健壮] ⚠️ 下拉未出现，继续尝试")
+        # 搜索职位并选择
+        page.wait_for_timeout(800)
+        # 带参数版本：在下拉搜索框输入职位
+        sel = page.evaluate("""(jobTitle) => {
+            const drops = document.querySelectorAll('.km-select__dropdown');
+            const drop = [...drops].find(d => { const st = window.getComputedStyle(d); return st.display !== 'none' && st.visibility !== 'hidden'; });
+            if (!drop) return { ok: false, err: 'no dropdown' };
+            const search = drop.querySelector('input');
+            if (search) {
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                setter.call(search, jobTitle);
+                search.dispatchEvent(new Event('input', { bubbles: true }));
+                search.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            return { ok: true };
+        }""", job_title)
+        print(f"   [健壮] 下拉搜索输入: {sel}")
+        page.wait_for_timeout(1200)
+        # 选择匹配选项：优先点击选项的可点子元素（title/label），确保框架识别
+        opt = page.evaluate("""(jobTitle) => {
+            const drops = document.querySelectorAll('.km-select__dropdown');
+            const drop = [...drops].find(d => { const st = window.getComputedStyle(d); return st.display !== 'none' && st.visibility !== 'hidden'; });
+            if (!drop) return { ok: false, err: 'no dropdown' };
+            // 候选：选项容器本身、其下的 title/label/可点元素
+            const containers = drop.querySelectorAll('.jsn-job-selector__option--container, [class*="option"], li');
+            const clickTargets = (el) => {
+                const t = (el.textContent || '').trim();
+                return { el, t, clickable: el.querySelector('title, label, [class*="title"], [class*="label"], span, p') };
+            };
+            for (const c of containers) {
+                const t = (c.textContent || '').trim();
+                if (t && (t === jobTitle || t.includes(jobTitle) || jobTitle.includes(t))) {
+                    // 点击选项（优先子元素）
+                    const child = c.querySelector('.jsn-job-selector__option--title, [class*="title"], label, span');
+                    (child || c).click();
+                    // 触发 mousedown/click 序列（部分框架需要）
+                    c.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    c.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                    c.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    return { ok: true, text: t };
+                }
+            }
+            // 无精确匹配：选第一个可点选项
+            for (const c of containers) {
+                const t = (c.textContent || '').trim();
+                if (t && !t.includes('请选择')) {
+                    const child = c.querySelector('.jsn-job-selector__option--title, [class*="title"], label, span');
+                    (child || c).click();
+                    c.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    c.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    return { ok: true, text: t, fallback: true };
+                }
+            }
+            return { ok: false, err: 'no options' };
+        }""", job_title)
+        print(f"   [健壮] 选项选择: {opt}")
+        page.wait_for_timeout(1500)
+        # 验证职位是否已填入输入框（不强制隐藏下拉，让框架正常提交）
+        pos_check = page.evaluate('''() => {
+            const modals = [...document.querySelectorAll('.km-modal__wrapper')].filter(m => {
+                const st = window.getComputedStyle(m); const r = m.getBoundingClientRect();
+                return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+            });
+            const target = [...modals].find(m => (m.innerText||'').includes('选择沟通职位') && (m.innerText||'').includes('候选人'));
+            if (!target) return { filled: false, err: 'no modal' };
+            const inputs = target.querySelectorAll('input');
+            for (const inp of inputs) {
+                if ((inp.placeholder||'').includes('沟通职位')) return { filled: !!((inp.value||'').trim()), value: (inp.value||'').trim() };
+            }
+            return { filled: false, err: 'no input' };
+        }''')
+        print(f"   [健壮] 职位填入验证: {pos_check}")
+        if not pos_check.get('filled'):
+            print(f"   [健壮] ⚠️ 职位未填入输入框，尝试 Playwright 原生点击最后一个匹配选项")
+            try:
+                # 用 Playwright 直接点下拉里匹配的选项
+                drops = page.locator('.km-select__dropdown:visible')
+                if drops.count() > 0:
+                    opts = drops.first.locator('.jsn-job-selector__option--container, [class*="option"]')
+                    for i in range(opts.count()):
+                        try:
+                            t = (opts.nth(i).text_content() or '').strip()
+                        except Exception:
+                            continue
+                        if t and (job_title in t or t in job_title):
+                            opts.nth(i).click(force=True)
+                            print(f"   [健壮] Playwright 点击选项: {t[:30]}")
+                            break
+                page.wait_for_timeout(1200)
+            except Exception as _pe:
+                print(f"   [健壮] Playwright 点选项失败: {_pe}")
+
+    # ---- 在候选人弹窗内点确定 ----
+    modal2 = _find_modal_for_candidate(page, candidate_name)
+    if modal2 is None:
+        print(f"   [健壮] ❌ 沟通职位弹窗消失（可能已提交或出错）")
+        return None
+    ok_click, btn_txt = _click_in_modal(page, modal2, ['确定', '确 定', '确认'])
+    if ok_click:
+        print(f"   [健壮] ✅ 点击确定「{btn_txt}」")
+    else:
+        print(f"   [健壮] ⚠️ 未找到确定按钮，尝试 JS 兜底")
+        page.evaluate('''() => {
+            const modals = [...document.querySelectorAll('.km-modal__wrapper')].filter(m => {
+                const st = window.getComputedStyle(m); const r = m.getBoundingClientRect();
+                return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+            });
+            for (const m of modals) {
+                if (!(m.innerText||'').includes('选择沟通职位')) continue;
+                const btns = m.querySelectorAll('button');
+                for (const b of btns) {
+                    const t = (b.textContent||'').trim();
+                    if (t === '确定' || t === '确 定') { b.click(); return; }
+                }
+            }
+        }''')
+    page.wait_for_timeout(2500)
+    if screenshot:
+        page.screenshot(path=f"{debug_dir}/r2_after_confirm.png")
+
+    # ---- 诊断：dump 确定后所有可见弹窗（找 AI 招呼语框）----
+    _modals_after = page.evaluate('''() => {
+        const out = [];
+        document.querySelectorAll('.km-modal__wrapper, .s-dialog, [role="dialog"], [class*="modal"]').forEach(m => {
+            const st = window.getComputedStyle(m); const r = m.getBoundingClientRect();
+            if (st.display === 'none' || st.visibility === 'hidden' || r.width === 0 || r.height === 0) return;
+            const btns = [];
+            m.querySelectorAll('button').forEach(b => {
+                const bs = window.getComputedStyle(b);
+                if (bs.display !== 'none' && bs.visibility !== 'hidden') btns.push((b.textContent||'').trim().slice(0,30));
+            });
+            const inputs = [];
+            m.querySelectorAll('input, textarea').forEach(i => {
+                inputs.push({ph: (i.placeholder||'').slice(0,20), val: (i.value||'').toString().slice(0,30)});
+            });
+            out.push({cls: (m.className||'').toString().slice(0,60), text: (m.innerText||'').trim().replace(/\s+/g,' ').slice(0,250), btns, inputs});
+        });
+        return out;
+    }''')
+    print(f"   [健壮] 确定后可见弹窗数={len(_modals_after)}")
+    for _i, _mm in enumerate(_modals_after):
+        print(f"     [{_i}] cls={_mm['cls']} btns={_mm['btns']} inputs={[ (x['ph'],x['val']) for x in _mm['inputs'] ]}")
+        print(f"          text={_mm['text'][:200]}")
+
+    # ---- 监听发送 API ----
+    send_hits = []
+    def _on_resp(resp):
+        try:
+            u = resp.url.lower()
+            if any(k in u for k in ['greet', 'sendtext', 'im/send', 'im/sendtext', 'invite', 'message/send']):
+                send_hits.append({'status': resp.status, 'url': resp.url[:130]})
+        except Exception:
+            pass
+    page.on('response', _on_resp)
+
+    # ---- 点击“使用并发送”或“发送” ----
+    send_clicked = False
+    # 先检查候选人的弹窗是否还有按钮
+    modal3 = _find_modal_for_candidate(page, candidate_name)
+    if modal3 is not None:
+        ok3, txt3 = _click_in_modal(page, modal3, ['使用并发送', '发送'])
+        if ok3:
+            send_clicked = True
+            print(f"   [健壮] ✅ 点击「{txt3}」")
+    if not send_clicked:
+        # 全局查找（但排除无关弹窗）
+        btns = page.locator('button:visible')
+        for i in range(btns.count()):
+            try:
+                t = (btns.nth(i).text_content() or '').strip()
+            except Exception:
+                continue
+            if '使用并发送' in t or t == '发送':
+                btns.nth(i).click(force=True)
+                send_clicked = True
+                print(f"   [健壮] ✅ 点击全局「{t}」")
+                break
+    if not send_clicked:
+        print(f"   [健壮] ❌ 未找到发送按钮")
+    page.wait_for_timeout(3500)
+    if screenshot:
+        page.screenshot(path=f"{debug_dir}/r3_after_send.png")
+
+    # ---- 验证是否真实发送 ----
+    page_warn = page.evaluate('''() => {
+        const body = document.body.innerText || '';
+        return ['\u804a\u5929\u6743\u76ca','\u641c\u804a\u52a0\u6cb9\u5305','\u6b21\u6570\u5df2\u7528\u5b8c','\u4f59\u989d\u4e0d\u8db3','\u53d1\u9001\u5931\u8d25'].filter(k => body.includes(k));
+    }''')
+    remaining = page.evaluate('''() => {
+        let n = 0;
+        [...document.querySelectorAll('.km-modal__wrapper')].forEach(m => {
+            const st = window.getComputedStyle(m); const r = m.getBoundingClientRect();
+            if (st.display === 'none' || st.visibility === 'hidden' || r.width === 0 || r.height === 0) return;
+            const t = m.innerText || '';
+            if (t.includes('选择沟通职位') || t.includes('请选择关键词')) n++;
+        });
+        return n;
+    }''')
+    ok_api = any(h.get('status') and 200 <= int(h['status']) < 300 for h in send_hits)
+    print(f"   [健壮] 验证: 发送API={len(send_hits)}条 ok={ok_api} | 剩余相关弹窗={remaining} | 告警={page_warn}")
+
+    if page_warn:
+        print(f"   [健壮] ❌ 检测到权益/失败告警: {page_warn}")
+        return False
+    if ok_api:
+        print(f"   [健壮] ✅ 捕获到发送API，确认成功")
+        return True
+    if remaining == 0:
+        print(f"   [健壮] ⚠️ 未捕获API但弹窗已关闭，判定可能成功（弱证据，请人工复核）")
+        return None
+    print(f"   [健壮] ❌ 无发送API且弹窗仍存在({remaining}个)，判定失败")
+    return False
 
 
 def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, education=None, experience=None, screenshot=False, candidate_info=None):
@@ -821,7 +1203,6 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=True,
-                executable_path='/snap/chromium/current/usr/lib/chromium-browser/chrome',
                 args=['--no-sandbox', '--disable-dev-shm-usage']
             )
             context = browser.new_context()
@@ -1279,6 +1660,28 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
                     job_title = matched_job.get('jobTitle', '')
                     job_number = matched_job.get('jobNumber', '')
                     print(f"   [职位] 将选择: {job_title} (编号: {job_number})")
+
+                # ==== 健壮版发送（优先）：按候选人锁定弹窗，真实验证发送 ====
+                try:
+                    _robust_result = send_greeting_robust(
+                        page, candidate_name, job_title, job_number,
+                        screenshot=screenshot, debug_dir=debug_dir
+                    )
+                    browser.close()
+                    if _robust_result is True:
+                        print(f"   ✅ 健壮版发送确认成功")
+                        print(f"\n✅ 成功向 {candidate_name} 发送打招呼消息!")
+                        return True
+                    elif _robust_result is None:
+                        print(f"   ⚠️ 健壮版：未捕获发送API但弹窗已关闭，判定可能成功（弱证据，请人工复核）")
+                        print(f"\n⚠️ 已向 {candidate_name} 发起打招呼（未确认，请人工复核）")
+                        return True
+                    else:
+                        print(f"   ❌ 健壮版确认发送失败")
+                        print(f"\n❌ 打招呼失败")
+                        return None
+                except Exception as _e:
+                    print(f"   ⚠️ 健壮版执行异常，回退旧逻辑: {_e}")
                 
                 # 点击沟通职位输入框打开下拉列表
                 print("   [UI] 点击沟通职位输入框...")
@@ -1703,8 +2106,65 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
                                 except Exception as e:
                                     print(f"   ⚠️ 点击'使用并发送'异常: {e}")
                             else:
-                                print(f"   ℹ️ 未检测到AI招呼语对话框（旧版流程直接发送成功）")
-                                target_found = True
+                                # 修复假成功：不能因为"未检测到AI招呼语对话框"就假定发送成功。
+                                # 必须验证实际证据：① 发送类API请求① 或 对话框已关闭且无错误提示
+                                print(f"   ℹ️ 未检测到AI招呼语对话框，正在验证是否真实发送...")
+                                page.wait_for_timeout(2500)
+
+                                # 证据1：是否有发送类 API 请求成功返回
+                                sent_api_ok = False
+                                try:
+                                    for req in send_api_results:
+                                        u = (req.get('url') or '').lower()
+                                        st = req.get('status')
+                                        if st and 200 <= int(st) < 300 and ('sendtext' in u or 'greet' in u or 'im/send' in u or 'invite' in u):
+                                            sent_api_ok = True
+                                            print(f"   [验证] 捕获到发送API: {st} {req.get('url')[:100]}")
+                                            break
+                                except Exception:
+                                    pass
+
+                                # 证据2：对话框是否已关闭
+                                try:
+                                    remaining_modals2 = page.evaluate("""() => {
+                                        const modals = document.querySelectorAll('.km-modal__wrapper');
+                                        let visible = 0;
+                                        for (const m of modals) {
+                                            const style = window.getComputedStyle(m);
+                                            if (style.display !== 'none' && style.visibility !== 'hidden') visible++;
+                                        }
+                                        return visible;
+                                    }""")
+                                except Exception:
+                                    remaining_modals2 = -1
+
+                                # 证据3：页面是否有错误/权益不足提示
+                                try:
+                                    page_warn = page.evaluate("""() => {
+                                        const body = document.body.innerText || '';
+                                        const hits = [];
+                                        ['\u804a\u5929\u6743\u76ca','\u641c\u804a\u52a0\u6cb9\u5305','\u6b21\u6570\u5df2\u7528\u5b8c','\u4f59\u989d\u4e0d\u8db3','\u53d1\u9001\u5931\u8d25'].forEach(k => {
+                                            if (body.includes(k)) hits.push(k);
+                                        });
+                                        return hits;
+                                    }""")
+                                except Exception:
+                                    page_warn = []
+
+                                print(f"   [验证] 发送API命中={sent_api_ok} | 可见对话框={remaining_modals2} | 页面告警={page_warn}")
+
+                                if page_warn:
+                                    print(f"   ❌ 页面出现告警（{page_warn}），判定发送失败")
+                                    target_found = False
+                                elif sent_api_ok:
+                                    print(f"   ✅ 已捕获发送API，确认发送成功")
+                                    target_found = True
+                                elif remaining_modals2 == 0:
+                                    print(f"   ⚠️ 未捕获到发送API，但对话框已关闭，判定为可能成功（弱证据，请人工复核）")
+                                    target_found = True
+                                else:
+                                    print(f"   ❌ 无发送API且对话框仍存在（{remaining_modals2}个），判定发送失败")
+                                    target_found = False
                         else:
                             print(f"   ⚠️ JavaScript点击失败: {js_result.get('error')}")
                             
@@ -1725,8 +2185,6 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
             
             if target_found and greet_button_clicked:
                 print(f"\n✅ 成功向 {candidate_name} 发送打招呼消息!")
-                # 记录打招呼信息到 IM 状态文件，便于后续消息监控
-                _save_greeting_record(candidate_name, candidate_info)
                 return True
             else:
                 print(f"\n❌ 打招呼失败")
@@ -1737,35 +2195,6 @@ def greet_candidate(candidate_name, job_keyword, cookies=None, location=None, ed
         import traceback
         traceback.print_exc()
         return None
-
-
-def _save_greeting_record(candidate_name, candidate_info=None):
-    """保存打招呼记录到 IM 状态文件，便于后续消息监控"""
-    import json
-    state_file = '/root/.openclaw/workspace-HR-Agent/config/im_state.json'
-    os.makedirs(os.path.dirname(state_file), exist_ok=True)
-    
-    state = {}
-    if os.path.exists(state_file):
-        try:
-            with open(state_file, 'r', encoding='utf-8') as f:
-                state = json.load(f)
-        except:
-            pass
-    
-    if 'greeted_candidates' not in state:
-        state['greeted_candidates'] = {}
-    
-    state['greeted_candidates'][candidate_name] = {
-        'name': candidate_name,
-        'greet_time': int(time.time() * 1000),
-        'greet_time_str': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'candidate_info': candidate_info or {}
-    }
-    
-    with open(state_file, 'w', encoding='utf-8') as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
-    print(f"   ✅ 已记录打招呼信息: {candidate_name}")
 
 
 def main():

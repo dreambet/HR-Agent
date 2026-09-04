@@ -189,22 +189,22 @@ def get_attach_resume_info(job_number, resume_number):
     return None
 
 
-def download_attach_resume(download_url, save_dir='/tmp/zhaopin_attachments'):
+def download_attach_to_buffer(download_url):
     """
-    下载附件简历
+    下载附件简历到内存，返回 base64 编码数据
     
     Args:
         download_url: 附件下载URL
-        save_dir: 保存目录
     
     Returns:
-        str: 保存的文件路径，或 None
+        tuple: (base64_data, filename, mime_type) 或 (None, None, None)
     """
-    os.makedirs(save_dir, exist_ok=True)
-    
     try:
         resp = requests.get(download_url, timeout=30)
         if resp.status_code == 200:
+            import base64
+            b64_data = base64.b64encode(resp.content).decode('utf-8')
+
             # 从 Content-Disposition 或 URL 中提取文件名
             filename = '附件简历.pdf'
             content_disp = resp.headers.get('Content-Disposition', '')
@@ -214,51 +214,52 @@ def download_attach_resume(download_url, save_dir='/tmp/zhaopin_attachments'):
                 if match:
                     from urllib.parse import unquote
                     filename = unquote(match.group(1))
-            
-            filepath = os.path.join(save_dir, filename)
-            with open(filepath, 'wb') as f:
-                f.write(resp.content)
-            print(f"   [附件] ✅ 已下载: {filepath} ({len(resp.content)} bytes)")
-            return filepath
+
+            # 确定 MIME 类型
+            mime_type = resp.headers.get('Content-Type', 'application/pdf')
+
+            print(f"   [附件] ✅ 已获取: {filename} ({len(resp.content)} bytes)")
+            return b64_data, filename, mime_type
         else:
-            print(f"   [附件] ⚠️ 下载失败: HTTP {resp.status_code}")
-            return None
+            print(f"   [附件] ⚠️ 获取失败: HTTP {resp.status_code}")
+            return None, None, None
     except Exception as e:
-        print(f"   [附件] ⚠️ 下载异常: {e}")
-        return None
+        print(f"   [附件] ⚠️ 获取异常: {e}")
+        return None, None, None
 
 
 def check_and_download_attach(session):
     """
-    检查会话是否有附件简历，如有则下载
+    检查会话是否有附件简历，如有则获取 base64 数据
     
     Args:
         session: 会话对象（来自 session/list）
     
     Returns:
-        dict: 附件信息 {filepath, fileName, fileType} 或 None
+        dict: 附件信息 {buffer, fileName, fileType, mimeType} 或 None
     """
     job_number = session.get('jobNumber')
     resume_number = session.get('resumeNumber')
-    
+
     if not job_number or not resume_number:
         return None
-    
+
     # 获取附件简历信息
     attach_info = get_attach_resume_info(job_number, resume_number)
     if not attach_info or not attach_info.get('url'):
         return None
-    
-    # 下载附件
-    filepath = download_attach_resume(attach_info['url'])
-    if filepath:
+
+    # 下载附件到内存（不落盘）
+    b64_data, filename, mime_type = download_attach_to_buffer(attach_info['url'])
+    if b64_data:
         return {
-            'filepath': filepath,
-            'fileName': attach_info.get('fileName', '附件简历'),
+            'buffer': b64_data,
+            'fileName': attach_info.get('fileName', filename),
             'fileType': attach_info.get('fileType', 'PDF'),
+            'mimeType': mime_type,
             'fileId': attach_info.get('fileId', '')
         }
-    
+
     return None
 
 
